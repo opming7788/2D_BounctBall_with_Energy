@@ -1,5 +1,6 @@
 # 2D 彈跳球能量守恆模擬
 
+👉 [點我進入觀看模擬](https://opming7788.github.io/2D_BounctBall_with_Energy/2D_BounctBall_with_Energy.html)
 此專案是一個基於 HTML5 Canvas 的 2D 彈跳球模擬，展示了能量守恆的概念。以下是技術細節：
 
 ## 使用技術
