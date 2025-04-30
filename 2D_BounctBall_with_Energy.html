@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2D彈跳球能量守恆模擬</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f0f0f0;
+      }
+      canvas {
+        border: 1px solid #000;
+        background-color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gameCanvas" width="500" height="500"></canvas>
+
+    <script>
+      // 遊戲常數
+      const CANVAS_WIDTH = 500;
+      const CANVAS_HEIGHT = 500;
+      const BALL_SIZE = 100;
+      const DELAY = 1; // 毫秒
+
+      // 獲取Canvas和Context
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // Canvas輔助類
+      class CanvasHelper {
+        constructor(canvas, ctx) {
+          this.canvas = canvas;
+          this.ctx = ctx;
+          this.objects = {};
+          this.nextId = 0;
+        }
+
+        // 清除Canvas
+        clear() {
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+
+        // 創建橢圓
+        create_oval(x1, y1, x2, y2, color) {
+          const id = this.nextId++;
+          this.objects[id] = {
+            type: "oval",
+            x: (x1 + x2) / 2,
+            y: (y1 + y2) / 2,
+            radiusX: Math.abs(x2 - x1) / 2,
+            radiusY: Math.abs(y2 - y1) / 2,
+            color: color,
+          };
+          this._draw_object(id);
+          return id;
+        }
+
+        // 創建文本
+        create_text(x, y, font, font_size, text, color = "black") {
+          const id = this.nextId++;
+          this.objects[id] = {
+            type: "text",
+            x: x,
+            y: y,
+            font: font || "Arial",
+            font_size: font_size || 15,
+            text: text || "",
+            color: color,
+          };
+          this._draw_object(id);
+          return id;
+        }
+
+        // 移動物件
+        move(id, dx, dy) {
+          const obj = this.objects[id];
+          if (!obj) return;
+
+          if (obj.type === "oval") {
+            obj.x += dx;
+            obj.y += dy;
+          } else if (obj.type === "text") {
+            obj.x += dx;
+            obj.y += dy;
+          }
+
+          this._redraw_all();
+        }
+
+        // 刪除物件
+        delete(id) {
+          if (this.objects[id]) {
+            delete this.objects[id];
+            this._redraw_all();
+          }
+        }
+
+        // 獲取物件左上角X座標
+        get_left_x(id) {
+          const obj = this.objects[id];
+          if (!obj) return 0;
+
+          if (obj.type === "oval") {
+            return obj.x - obj.radiusX;
+          } else if (obj.type === "text") {
+            return obj.x;
+          }
+          return 0;
+        }
+
+        // 獲取物件左上角Y座標
+        get_top_y(id) {
+          const obj = this.objects[id];
+          if (!obj) return 0;
+
+          if (obj.type === "oval") {
+            return obj.y - obj.radiusY;
+          } else if (obj.type === "text") {
+            return obj.y;
+          }
+          return 0;
+        }
+
+        // 繪製特定物件
+        _draw_object(id) {
+          const obj = this.objects[id];
+          if (!obj) return;
+
+          this.ctx.save();
+
+          if (obj.type === "oval") {
+            this.ctx.beginPath();
+            this.ctx.ellipse(
+              obj.x,
+              obj.y,
+              obj.radiusX,
+              obj.radiusY,
+              0,
+              0,
+              Math.PI * 2
+            );
+            this.ctx.fillStyle = obj.color;
+            this.ctx.fill();
+            this.ctx.stroke();
+          } else if (obj.type === "text") {
+            this.ctx.font = `${obj.font_size}px ${obj.font}`;
+            this.ctx.fillStyle = obj.color;
+            this.ctx.fillText(obj.text, obj.x, obj.y + obj.font_size / 2);
+          }
+
+          this.ctx.restore();
+        }
+
+        // 重繪所有物件
+        _redraw_all() {
+          this.clear();
+          for (const id in this.objects) {
+            this._draw_object(id);
+          }
+        }
+      }
+
+      // 球體類
+      class Ball2 {
+        constructor(canvas, Vx, Vy, Ball_x, Ball_y, Ball_R, mass, color) {
+          this.Vx = Vx;
+          this.Vy = Vy;
+          this.CollBtwBallFlag = true;
+          this.CollBtwWall_x_Flag = true;
+          this.CollBtwWall_y_Flag = true;
+          this.Ball_x = Ball_x;
+          this.Ball_y = Ball_y;
+          this.Ball_R = Ball_R;
+          this.mass = mass;
+          this.color = color;
+          this.canvas = canvas;
+          this.name = canvas.create_oval(
+            Ball_x - Ball_R,
+            Ball_y - Ball_R,
+            Ball_x + Ball_R,
+            Ball_y + Ball_R,
+            color
+          );
+        }
+
+        setVelocity(Vx, Vy) {
+          this.Vx = Vx;
+          this.Vy = Vy;
+        }
+
+        getVelocity() {
+          return [this.Vx, this.Vy];
+        }
+
+        getname() {
+          return this.name;
+        }
+
+        getPosition() {
+          const top_y = this.canvas.get_top_y(this.name);
+          const Left_x = this.canvas.get_left_x(this.name);
+          this.Ball_x = Left_x + this.Ball_R;
+          this.Ball_y = top_y + this.Ball_R;
+          return [this.Ball_x, this.Ball_y];
+        }
+
+        getBall_R() {
+          return this.Ball_R;
+        }
+
+        getMass() {
+          return this.mass;
+        }
+
+        getCollBtwBallFlag() {
+          return this.CollBtwBallFlag;
+        }
+
+        setCollBtwBallFlag(a) {
+          this.CollBtwBallFlag = a;
+        }
+
+        getCollBtwWall_x_Flag() {
+          return this.CollBtwWall_x_Flag;
+        }
+
+        setCollBtwWall_x_Flag(a) {
+          this.CollBtwWall_x_Flag = a;
+        }
+
+        getCollBtwWall_y_Flag() {
+          return this.CollBtwWall_y_Flag;
+        }
+
+        setCollBtwWall_y_Flag(a) {
+          this.CollBtwWall_y_Flag = a;
+        }
+      }
+
+      // 計算能量
+      function CalEnergy(a, b) {
+        const ma = a.getMass();
+        const mb = b.getMass();
+        const [vax, vay] = a.getVelocity();
+        const [vbx, vby] = b.getVelocity();
+        const eng =
+          0.5 * ma * (vax ** 2 + vay ** 2) + 0.5 * mb * (vbx ** 2 + vby ** 2);
+        // 不再四捨五入，保留完整精度
+        return eng;
+      }
+
+      // 計算球體之間的距離
+      function Ball_Center_Distance(a, b) {
+        const a_Pos = a.getPosition();
+        const b_Pos = b.getPosition();
+        const distance = Math.sqrt(
+          (a_Pos[0] - b_Pos[0]) ** 2 + (a_Pos[1] - b_Pos[1]) ** 2
+        );
+        return distance;
+      }
+
+      // 牆壁反彈
+      function ReboundWithWall(a) {
+        const [ax, ay] = a.getPosition();
+        const r = a.getBall_R();
+
+        const cond_a = ay + r > CANVAS_HEIGHT;
+        const cond_b = ay - r < 0;
+        const cond_c = ax + r > CANVAS_WIDTH;
+        const cond_d = ax - r < 0;
+
+        let [Vax, Vay] = a.getVelocity();
+        const a_wxc = a.getCollBtwWall_x_Flag();
+        const a_wyc = a.getCollBtwWall_y_Flag();
+
+        if ((cond_a || cond_b) && a_wyc) {
+          a.setVelocity(Vax, -Vay);
+          a.setCollBtwWall_y_Flag(false);
+        }
+
+        if ((cond_c || cond_d) && a_wxc) {
+          a.setVelocity(-Vax, Vay);
+          a.setCollBtwWall_x_Flag(false);
+        }
+
+        if (!cond_a && !cond_b) {
+          a.setCollBtwWall_y_Flag(true);
+        }
+
+        if (!cond_c && !cond_d) {
+          a.setCollBtwWall_x_Flag(true);
+        }
+      }
+
+      // 球體碰撞
+      function Collision_of_Balls(a, b) {
+        const ma = a.getMass();
+        const mb = b.getMass();
+        const [vax, vay] = a.getVelocity();
+        const [posax, posay] = a.getPosition();
+
+        const [vbx, vby] = b.getVelocity();
+        const [posbx, posby] = b.getPosition();
+
+        const dotval =
+          (vax - vbx) * (posax - posbx) + (vay - vby) * (posay - posby);
+
+        const dis = Ball_Center_Distance(a, b);
+
+        const a_c = a.getCollBtwBallFlag();
+        const b_c = b.getCollBtwBallFlag();
+
+        if (dis < a.getBall_R() + b.getBall_R() && a_c && b_c) {
+          const uax =
+            vax -
+            ((((2 * mb) / (ma + mb)) * dotval) / dis ** 2) * (posax - posbx);
+          const uay =
+            vay -
+            ((((2 * mb) / (ma + mb)) * dotval) / dis ** 2) * (posay - posby);
+          const ubx =
+            vbx -
+            ((((2 * ma) / (ma + mb)) * dotval) / dis ** 2) * (posbx - posax);
+          const uby =
+            vby -
+            ((((2 * ma) / (ma + mb)) * dotval) / dis ** 2) * (posby - posay);
+
+          a.setVelocity(uax, uay);
+          b.setVelocity(ubx, uby);
+          a.setCollBtwBallFlag(false);
+          b.setCollBtwBallFlag(false);
+        }
+
+        if (dis > a.getBall_R() + b.getBall_R()) {
+          a.setCollBtwBallFlag(true);
+          b.setCollBtwBallFlag(true);
+        }
+      }
+
+      // 主程式
+      function main() {
+        const canvasHelper = new CanvasHelper(canvas, ctx);
+
+        let Energy = 0;
+        canvasHelper.create_text(20, 30, "Arial", 25, "能量:", "blue");
+        let Eng_Text = canvasHelper.create_text(
+          100,
+          30,
+          "Arial",
+          28,
+          "0",
+          "red"
+        );
+
+        // 創建兩個球體
+        const a = new Ball2(
+          canvasHelper,
+          -4,
+          -6,
+          CANVAS_WIDTH / 2,
+          CANVAS_HEIGHT / 4,
+          100,
+          80,
+          "blue"
+        );
+        const b = new Ball2(
+          canvasHelper,
+          4,
+          2,
+          CANVAS_WIDTH / 2,
+          CANVAS_HEIGHT / 2,
+          30,
+          20,
+          "red"
+        );
+
+        // 遊戲主循環
+        function gameLoop() {
+          // 球體a的資訊
+          const [Vax, Vay] = a.getVelocity();
+          const mass_a = a.getMass();
+          const [text_ax, text_ay] = a.getPosition();
+          const text_ax_offset = text_ax - 0.75 * a.getBall_R();
+
+          const obj1 = canvasHelper.create_text(
+            text_ax_offset,
+            text_ay - 0.5 * a.getBall_R(),
+            "Arial",
+            28,
+            "Vx = " + Vax.toFixed(3)
+          );
+          const obj2 = canvasHelper.create_text(
+            text_ax_offset,
+            text_ay - 0.25 * a.getBall_R(),
+            "Arial",
+            28,
+            "Vy = " + Vay.toFixed(3)
+          );
+          const obj3 = canvasHelper.create_text(
+            text_ax_offset,
+            text_ay,
+            "Arial",
+            28,
+            "mass = " + mass_a
+          );
+
+          // 球體b的資訊
+          const [Vbx, Vby] = b.getVelocity();
+          const mass_b = b.getMass();
+          const [text_bx, text_by] = b.getPosition();
+          const text_bx_offset = text_bx - 0.75 * b.getBall_R();
+
+          const obj4 = canvasHelper.create_text(
+            text_bx_offset,
+            text_by - 0.5 * b.getBall_R(),
+            "Arial",
+            15,
+            "Vx = " + Vbx.toFixed(3)
+          );
+          const obj5 = canvasHelper.create_text(
+            text_bx_offset,
+            text_by,
+            "Arial",
+            15,
+            "Vy = " + Vby.toFixed(3)
+          );
+          const obj6 = canvasHelper.create_text(
+            text_bx_offset,
+            text_by + 0.5 * b.getBall_R(),
+            "Arial",
+            15,
+            "mass = " + mass_b
+          );
+
+          // 移動球體
+          canvasHelper.move(
+            a.getname(),
+            a.getVelocity()[0],
+            a.getVelocity()[1]
+          );
+          canvasHelper.move(
+            b.getname(),
+            b.getVelocity()[0],
+            b.getVelocity()[1]
+          );
+
+          // 碰撞檢測和能量計算
+          ReboundWithWall(a);
+          ReboundWithWall(b);
+          Collision_of_Balls(a, b);
+          Energy = CalEnergy(a, b);
+
+          // 更新能量顯示
+          canvasHelper.delete(Eng_Text);
+          // 使用toFixed(5)顯示小數點後五位
+          Eng_Text = canvasHelper.create_text(
+            100,
+            30,
+            "Arial",
+            28,
+            Energy.toFixed(5),
+            "red"
+          );
+
+          // 清除文字，準備下一幀
+          setTimeout(() => {
+            canvasHelper.delete(obj1);
+            canvasHelper.delete(obj2);
+            canvasHelper.delete(obj3);
+            canvasHelper.delete(obj4);
+            canvasHelper.delete(obj5);
+            canvasHelper.delete(obj6);
+
+            requestAnimationFrame(gameLoop);
+          }, DELAY);
+        }
+
+        // 開始遊戲循環
+        gameLoop();
+      }
+
+      // 頁面載入時啟動主程式
+      window.onload = main;
+    </script>
+  </body>
+</html>
